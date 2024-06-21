@@ -1,0 +1,163 @@
+# set up neccesarry Resource for accessing data
+
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  PatientDataBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: 'my-healthcare-data'
+      VersioningConfiguration:
+        Status: 'Enabled'
+
+  PatientDatabase:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      DBInstanceIdentifier: 'mydbinstance-db'
+      DBInstanceClass: 'db.t2.micro'
+      Engine: 'mysql'
+      Username: !Ref admin
+      UserPassword: Ask1234
+      AllocatedStorage: '20'
+      BackupRetentionPeriod: '7'
+      MultiAZ: true
+      PubliclyAccessible: false
+
+  PatientDatabaseSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Enable access to RDS instance'
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          FromPort: '3306'
+          ToPort: '3306'
+          CidrIp: '0.0.0.0/0'
+
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: 'LambdaExecutionRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'LambdaExecutionPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 's3:*'
+                  - 'rds:*'
+                  - 'logs:*'
+                  - 'cloudwatch:*'
+                Resource: '*'
+
+  PatientDataProcessingLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'PatientDataProcessing'
+      Handler: 'index.handler'
+      Role: LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+
+          def handler(event, context):
+              s3 = boto3.client('s3')
+              rds = boto3.client('rds-data')
+
+              bucket_name = os.environ['S3_BUCKET']
+              db_secret_arn = os.environ['DB_SECRET']
+              
+              print("Processing patient data...")
+              
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps('Data processed successfully!')
+              }
+
+      Runtime: 'python3.9'
+      Timeout: 300
+      Environment:
+        Variables:
+          S3_BUCKET: my-healthcare-data
+          DB_SECRET: AKIAU6GDVZMW3QOLWVCL
+
+
+  PatientDataAPI:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: 'PatientDataAPI'
+      Description: 'API for managing patient data'
+  
+  LambdaApiPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties: 
+      Action: "lambda:InvokeFunction"
+      FunctionName: PatientDataProcessingLambda
+      Principal: "apigateway.amazonaws.com"
+  
+  ApiResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: PatientDataAPI.RootResourceId
+      PathPart: 'patientdata'
+      RestApiId: PatientDataAPI
+
+  ApiMethodPost:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: 'NONE'
+      HttpMethod: 'POST'
+      ResourceId: ApiResource
+      RestApiId: PatientDataAPI
+      Integration:
+        IntegrationHttpMethod: 'POST'
+        Type: 'AWS_PROXY'
+        Uri: 
+          Fn::Sub: 
+            - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionArn}/invocations
+            - LambdaFunctionArn: PatientDataProcessingLambda.Arn
+
+  ApiMethodGet:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: 'NONE'
+      HttpMethod: 'GET'
+      ResourceId: ApiResource
+      RestApiId: PatientDataAPI
+      Integration:
+        IntegrationHttpMethod: 'POST'
+        Type: 'AWS_PROXY'
+        Uri: 
+          Fn::Sub: 
+            - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionArn}/invocations
+            - LambdaFunctionArn: PatientDataProcessingLambda.Arn
+
+  DBSecret:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: 'RDSSecret'
+      Description: 'Secret for RDS DB instance'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\\'
+
+Parameters:
+  DBUsername:
+    Type: String
+    Default: 'admin'
+  DBPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 41
+    Description: 'The database admin account password'
