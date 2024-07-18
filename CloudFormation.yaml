@@ -16,7 +16,7 @@ Resources:
       DBInstanceClass: 'db.t2.micro'
       Engine: 'mysql'
       Username: !Ref admin
-      UserPassword: Ask1234
+      UserPassword: 
       AllocatedStorage: '20'
       BackupRetentionPeriod: '7'
       MultiAZ: true
