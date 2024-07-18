@@ -6,7 +6,7 @@ rds_client.create_db_instance(
     AllocatedStorage=20,
     DBInstanceClass='db.t2.micro',
     Engine='mysql',
-    Username='admin',
-    UserPassword='Ask1234',
+    Username='',
+    UserPassword='',
     BackupRetentionPeriod=7
 )
