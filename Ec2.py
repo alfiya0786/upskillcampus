@@ -5,8 +5,8 @@ response = ec2_client.run_instances(
     ImageId='ami-0abcdef1234567890',
     InstanceType='t2.micro',
     KeyName='Datamanage',
-    SecurityGroupIds=['sg-0603fbe43075c6a97'],
-    SubnetId='subnet-07dc70b5940aa4615',
+    SecurityGroupIds=[''],
+    SubnetId='',
     MinCount=1,
     MaxCount=1
 )
