@@ -1,1 +1,1 @@
-This project is abou cloud base healthcare data management.
+This project is about cloud base healthcare data management.
